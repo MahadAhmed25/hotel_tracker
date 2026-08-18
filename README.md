@@ -271,6 +271,23 @@ The API can report a price two ways, and the bot prefers the more complete one:
 - `before_taxes_fees` — a pre-tax figure → used only as a fallback, and then
   the alert is explicitly labelled **"Total before taxes/fees"** with a warning.
 
+### Occupancy
+
+Google Hotels lists cheap **single-occupancy** rates next to double rates,
+especially at budget hotels. Quoting the single would be misleading, so any
+provider quote whose `num_guests` is lower than your `ADULTS` setting is
+discarded. When a quote doesn't state its occupancy at all, the alert says so
+and tells you to check the room sleeps 2.
+
+### Why the alert links to Google Hotels, not the hotel's website
+
+The price the bot quotes comes from Google's aggregation of booking providers.
+A hotel's *own* website often charges a completely different direct rate, so
+linking there would show you a number that doesn't match the alert. The primary
+link therefore goes to the Google Hotels comparison **carrying your dates**, so
+the quoted price is actually checkable. The hotel's own site is included as a
+clearly-labelled second link.
+
 ### Currency
 
 Everything is compared in **US dollars**. The bot asks SerpApi for USD, checks
@@ -391,11 +408,19 @@ schedule:
 | Every 12 hours    | `"0 */12 * * *"`   |
 | Once a day, 1pm UTC | `"0 13 * * *"`   |
 
-⚠️ **Mind your SerpApi quota.** The free plan is **100 searches a month**.
-Each run uses `MAX_PAGES` searches (2 by default), plus one extra per hotel it
-alerts on. Every 8 hours × 2 pages ≈ 180 searches/month, which is over the free
-limit. If you are on the free plan, either set `MAX_PAGES: "1"` (≈90/month) or
-switch the schedule to every 12 hours.
+⚠️ **Mind your SerpApi quota.** Each run uses `MAX_PAGES` searches (4 by
+default = 80 hotels scanned), plus one extra credit per hotel it alerts on.
+
+| Setting | Searches per month |
+| ------- | ------------------ |
+| Every 8h, 4 pages (current) | ~360 |
+| Every 8h, 2 pages | ~180 |
+| Every 12h, 2 pages | ~120 |
+| Every 8h, 1 page | ~90 (fits the free plan) |
+
+Because this bot only needs to run until the trip starts, what actually
+matters is *searches until then*, not per month: at 4 pages every 8 hours it
+uses about **12 searches a day**.
 
 ### Other settings
 
@@ -404,7 +429,7 @@ switch the schedule to every 12 hours.
 | `MAX_TOTAL_PRICE_USD` | `2000` | Total must be under this |
 | `MIN_DROP_USD` | `50` | How much cheaper before you're told again |
 | `ADULTS` | `2` | Number of guests |
-| `MAX_PAGES` | `2` | SerpApi pages per search — **each page costs one credit** |
+| `MAX_PAGES` | `4` | SerpApi pages per search, 20 hotels each — **each page costs one credit** |
 | `RENOTIFY_AFTER_HOURS` | `0` | `0` = never re-alert just because time passed |
 | `MAX_ALERTS_PER_RUN` | `10` | Safety cap on messages per run |
 | `FETCH_ADDRESS_DETAILS` | `true` | Set `false` to save one credit per alert (you lose the street address) |
@@ -431,7 +456,7 @@ messages read correctly.
 | `requirements.txt` | The two Python packages needed (`requests`, plus `pytest` for the tests). |
 | `state.json` | The price history that stops repeat alerts. Committed automatically by GitHub Actions — do not edit it by hand. |
 | `.github/workflows/hotel-price-check.yml` | The schedule, the **Run workflow** button, and all the settings. |
-| `tests/test_hotel_tracker.py` | 122 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
+| `tests/test_hotel_tracker.py` | 126 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
 | `.gitignore` | Keeps junk out of the repository. Deliberately does **not** ignore `state.json`. |
 | `README.md` | This file. |
 
@@ -449,6 +474,10 @@ $env:DISCORD_WEBHOOK_URL="your-webhook"
 python hotel_tracker.py --dry-run          # search, print, send nothing
 python hotel_tracker.py --test-discord     # send one sample alert
 python hotel_tracker.py                    # the real thing
+
+# Investigate a price that looks wrong - dumps the raw API data for one hotel
+# and shows exactly how the bot read it:
+python hotel_tracker.py --debug-hotel "Pod 51"
 ```
 
 ---

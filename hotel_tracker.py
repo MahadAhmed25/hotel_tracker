@@ -357,6 +357,7 @@ class Offer:
     nightly: Optional[float] = None
     link: Optional[str] = None
     is_headline: bool = False   # the property-level "lowest listed" figure
+    num_guests: Optional[int] = None  # None = the API did not say
 
     @property
     def nightly_display(self) -> float:
@@ -427,6 +428,7 @@ def _offer_from_rates(
     rate_per_night: Any,
     link: Optional[str],
     is_headline: bool = False,
+    num_guests: Optional[int] = None,
 ) -> Optional[Offer]:
     """Build one Offer, preferring a real stay total over a nightly figure."""
     total, all_in = _extract_rate(total_rate)
@@ -440,6 +442,7 @@ def _offer_from_rates(
             nightly=nightly,
             link=link,
             is_headline=is_headline,
+            num_guests=num_guests,
         )
 
     nightly, nightly_all_in = _extract_rate(rate_per_night)
@@ -452,13 +455,20 @@ def _offer_from_rates(
             nightly=nightly,
             link=link,
             is_headline=is_headline,
+            num_guests=num_guests,
         )
 
     return None
 
 
-def extract_offers(hotel: dict[str, Any]) -> list[Offer]:
-    """Every price we can read for this hotel: the headline one plus each provider."""
+def extract_offers(hotel: dict[str, Any], required_guests: Optional[int] = None) -> list[Offer]:
+    """
+    Every price we can read for this hotel: the headline one plus each provider.
+
+    `required_guests` drops provider quotes that are for fewer people than you
+    are travelling with. Budget hotels list a cheap single-occupancy rate
+    alongside the double, and quoting the single would be flatly misleading.
+    """
     offers: list[Offer] = []
     link = hotel.get("link") if isinstance(hotel.get("link"), str) else None
 
@@ -479,11 +489,24 @@ def extract_offers(hotel: dict[str, Any]) -> list[Offer]:
                 continue
             provider = str(entry.get("source") or "").strip() or "Unknown provider"
             entry_link = entry.get("link") if isinstance(entry.get("link"), str) else link
+
+            guests: Optional[int] = None
+            raw_guests = entry.get("num_guests")
+            if isinstance(raw_guests, (int, float)) and not isinstance(raw_guests, bool):
+                guests = int(raw_guests)
+
+            # A quote for fewer people than are travelling is not a usable
+            # price - this is how a $262 single-occupancy rate masquerades as
+            # the price of a room for two.
+            if required_guests and guests is not None and guests < required_guests:
+                continue
+
             offer = _offer_from_rates(
                 provider=provider,
                 total_rate=entry.get("total_rate"),
                 rate_per_night=entry.get("rate_per_night"),
                 link=entry_link,
+                num_guests=guests,
             )
             if offer:
                 offers.append(offer)
@@ -842,9 +865,20 @@ COLOR_ESTIMATED = 0xE67E22  # orange
 
 
 def google_hotels_link(hotel: dict[str, Any]) -> str:
+    """
+    A Google Hotels link carrying OUR dates and guest count.
+
+    This matters: `hotel["link"]` is the property's own website, whose direct
+    rack rate is often nothing like the aggregated price we quoted. Linking to
+    the dated Google Hotels comparison is what lets you actually check the
+    number in the alert.
+    """
     name = str(hotel.get("name") or "hotel")
     query = urllib.parse.quote_plus(f"{name} New York")
-    return f"https://www.google.com/travel/search?q={query}"
+    return (
+        f"https://www.google.com/travel/search?q={query}"
+        f"&checkin={CHECK_IN_DATE}&checkout={CHECK_OUT_DATE}"
+    )
 
 
 def build_discord_payload(
@@ -864,8 +898,12 @@ def build_discord_payload(
         area = "Manhattan"
         maps_url = None
 
-    link = best.link or (hotel.get("link") if isinstance(hotel.get("link"), str) else None)
-    link = link or google_hotels_link(hotel)
+    # Primary link = the dated Google Hotels comparison, because that is where
+    # the quoted price came from and therefore the only place it can be
+    # checked. The property's own website is offered separately.
+    compare_link = google_hotels_link(hotel)
+    own_site = hotel.get("link") if isinstance(hotel.get("link"), str) else None
+    link = compare_link
 
     fields: list[dict[str, Any]] = [
         {"name": "\U0001f4cd Area", "value": area, "inline": True},
@@ -881,6 +919,16 @@ def build_discord_payload(
             "inline": True,
         },
         {"name": "Provider", "value": best.provider, "inline": True},
+        {
+            "name": "Guests",
+            "value": (
+                f"{best.num_guests} guest(s) — matches your search"
+                if best.num_guests is not None
+                else "⚠️ Not stated by the API — confirm the room sleeps "
+                     f"{settings.adults}"
+            ),
+            "inline": True,
+        },
         {"name": "Price type", "value": best.price_type_label(), "inline": False},
     ]
 
@@ -905,10 +953,13 @@ def build_discord_payload(
             {"name": "Other qualifying prices", "value": "\n".join(lines), "inline": False}
         )
 
+    link_lines = [f"[Compare prices on Google Hotels for these dates]({compare_link})"]
+    if own_site:
+        link_lines.append(f"[The hotel's own website]({own_site}) (direct rate may differ)")
     fields.append(
         {
             "name": "\U0001f517 Booking / Hotel Link",
-            "value": f"[Open the listing and confirm the final checkout price]({link})",
+            "value": "\n".join(link_lines) + "\n**Always confirm the final checkout price.**",
             "inline": False,
         }
     )
@@ -1017,7 +1068,7 @@ def process_hotels(
                 print(f"[skip-geo]   {name}: {reason}")
                 continue
 
-            offers = extract_offers(hotel)
+            offers = extract_offers(hotel, required_guests=settings.adults)
             if not offers:
                 rejected_price += 1
                 print(f"[skip-price] {name}: no usable USD price")
@@ -1117,6 +1168,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="search and filter, but send nothing")
     parser.add_argument("--test-discord", action="store_true", help="send one sample alert and exit")
     parser.add_argument("--print-config", action="store_true", help="show settings, make no calls")
+    parser.add_argument(
+        "--debug-hotel",
+        metavar="NAME",
+        help="dump the raw SerpApi data for hotels whose name contains NAME",
+    )
     args = parser.parse_args(argv)
 
     settings = Settings.from_env()
@@ -1163,6 +1219,46 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if not hotels:
         print("[info] no results returned this run; nothing to do")
+        return 0
+
+    if args.debug_hotel:
+        needle = args.debug_hotel.strip().lower()
+        matches = [h for h in hotels if needle in str(h.get("name") or "").lower()]
+        if not matches:
+            print(f"No hotel matching {args.debug_hotel!r} in {len(hotels)} results.")
+            print("Names returned:")
+            for h in hotels:
+                print(f"  - {h.get('name')}")
+            return 0
+
+        for match in matches:
+            print("=" * 70)
+            print(f"RAW SERPAPI DATA — {match.get('name')}")
+            print("=" * 70)
+            print(json.dumps(
+                {
+                    key: match.get(key)
+                    for key in (
+                        "name", "type", "link", "property_token", "gps_coordinates",
+                        "rate_per_night", "total_rate", "prices", "deal",
+                        "deal_description", "hotel_class",
+                    )
+                    if match.get(key) is not None
+                },
+                indent=2,
+            ))
+            print("\nHOW THE BOT READS THAT:")
+            for offer in extract_offers(match, required_guests=settings.adults):
+                guests = offer.num_guests if offer.num_guests is not None else "not stated"
+                print(
+                    f"  {offer.provider:<32} ${offer.total:>9,.2f} {offer.kind:<9} "
+                    f"guests={guests} taxes_included={offer.includes_taxes_fees}"
+                )
+            best, _ = pick_best_offer(
+                extract_offers(match, required_guests=settings.adults),
+                settings.max_total_price_usd,
+            )
+            print(f"  -> chosen: {best.provider} ${best.total:,.2f}" if best else "  -> nothing qualifies")
         return 0
 
     state = load_state()

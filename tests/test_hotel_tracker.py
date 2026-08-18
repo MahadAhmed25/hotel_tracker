@@ -383,6 +383,62 @@ def test_named_provider_beats_the_generic_headline_at_the_same_price():
     assert [o.provider for o in others] == ["Expedia"], "no duplicate headline line"
 
 
+def test_single_occupancy_rate_is_not_quoted_for_two_travellers():
+    """The Pod 51 failure: a cheap 1-guest rate must not stand in for a double."""
+    record = hotel(
+        "Pod Style Hotel",
+        40.7549,
+        -73.9748,
+        prices=[
+            {"source": "Cheap OTA", "num_guests": 1, "rate_per_night": rate(262.0)},
+            {"source": "Booking.com", "num_guests": 2, "rate_per_night": rate(420.0)},
+        ],
+    )
+    offers = ht.extract_offers(record, required_guests=2)
+    assert [o.provider for o in offers] == ["Booking.com"]
+    assert offers[0].total == pytest.approx(1680.0)
+
+
+def test_occupancy_filter_keeps_larger_rooms():
+    record = hotel(
+        "Family Hotel",
+        40.7549,
+        -73.9748,
+        prices=[
+            {"source": "Solo Deal", "num_guests": 1, "rate_per_night": rate(200.0)},
+            {"source": "Quad Deal", "num_guests": 4, "rate_per_night": rate(300.0)},
+        ],
+    )
+    offers = ht.extract_offers(record, required_guests=2)
+    assert [o.provider for o in offers] == ["Quad Deal"], "more guests than needed is fine"
+
+
+def test_offers_without_a_stated_occupancy_are_kept_but_flagged():
+    record = hotel(
+        "Unstated Hotel",
+        40.7549,
+        -73.9748,
+        prices=[{"source": "Mystery OTA", "rate_per_night": rate(400.0)}],
+    )
+    offers = ht.extract_offers(record, required_guests=2)
+    assert len(offers) == 1
+    assert offers[0].num_guests is None
+
+    best = offers[0]
+    blob = str(ht.build_discord_payload(record, best, [], None, ht.Settings()))
+    assert "Not stated by the API" in blob
+
+
+def test_alert_links_to_google_hotels_with_our_dates():
+    record = hotel("Linky Hotel", 40.7075, -74.0113, link="https://hotel-own-site.example")
+    best = ht.Offer("Booking.com", 1850.0, ht.ACTUAL, True)
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings())
+    url = payload["embeds"][0]["url"]
+    assert "checkin=2026-09-04" in url and "checkout=2026-09-08" in url
+    # the hotel's own site is still offered, but clearly as a secondary link
+    assert "hotel-own-site.example" in str(payload)
+
+
 def test_all_in_price_preferred_over_pre_tax_at_the_same_number():
     offers = [
         ht.Offer("Pre-tax Co", 1800.0, ht.ACTUAL, includes_taxes_fees=False),

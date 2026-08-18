@@ -75,8 +75,9 @@ jobs:
           MIN_DROP_USD: "50"
           # Number of guests.
           ADULTS: "2"
-          # SerpApi result pages per query. Each page costs one search credit.
-          MAX_PAGES: "2"
+          # SerpApi result pages per query (20 hotels per page).
+          # Each page costs one search credit.
+          MAX_PAGES: "4"
         run: python hotel_tracker.py ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Remember which hotels were already reported
