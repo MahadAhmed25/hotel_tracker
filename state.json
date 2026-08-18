@@ -1,4 +1,96 @@
 {
-  "hotels": {},
+  "hotels": {
+    "token:ChgI-N6n0Nnyw_K2ARoLL2cvMXRqZGgzMjkQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 1132.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 1132.0,
+      "name": "OYO Times Square"
+    },
+    "token:ChgI5MyhnoKIv-7JARoLL2cvMXdrN3J0MmIQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 709.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 709.0,
+      "name": "HI New York City Hostel"
+    },
+    "token:ChgI7amOooeH09krGgwvZy8xMnFmeHdsMWsQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 1046.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 1046.0,
+      "name": "Pod 51"
+    },
+    "token:ChgI85PL4pmV3LOYARoLL2cvMXcwc2RzcngQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 711.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 711.0,
+      "name": "Chelsea International Hostel"
+    },
+    "token:ChgIm7695bnChMJMGgwvZy8xamxrMWZtZ3IQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 930.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 930.0,
+      "name": "Holiday Inn Express New York City-Wall Street, an IHG Hotel"
+    },
+    "token:ChgIsuvJ7a2bz58NGgwvZy8xMTl0eDh2ZmsQAQ": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 1004.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 1004.0,
+      "name": "Pod 39"
+    },
+    "token:ChkIgMa8n4mj9eccGg0vZy8xMWI3cTk5ZnZkEAE": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 1075.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 1075.0,
+      "name": "The Gallivant Times Square"
+    },
+    "token:ChoIwv_vofG5qYLaARoNL2cvMTF2emR2enNzeBAB": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 896.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 896.0,
+      "name": "The Nolita Express Hostel"
+    },
+    "token:ChoIxPKIzoX4zIfLARoNL2cvMTFwd2g1N2c1NRAB": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 801.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 801.0,
+      "name": "31 Street Broadway Hotel"
+    },
+    "token:ChoIy_vR5MCBueHEARoNL2cvMTF3OGs0amt3NxAB": {
+      "below_threshold": true,
+      "last_alert_at": "2026-08-18T19:13:06+00:00",
+      "last_alert_kind": "ACTUAL",
+      "last_alert_total": 1047.0,
+      "last_seen_at": "2026-08-18T19:13:06+00:00",
+      "last_seen_total": 1047.0,
+      "name": "Hudson Yards Hotel"
+    }
+  },
+  "updated_at": "2026-08-18T19:13:34+00:00",
   "version": 1
 }
