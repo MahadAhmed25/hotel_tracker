@@ -1,0 +1,4 @@
+requests>=2.31.0
+
+# Only needed to run the test suite (pytest -q). Harmless to install.
+pytest>=8.0.0

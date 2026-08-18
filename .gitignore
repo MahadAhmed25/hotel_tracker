@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+*.egg-info/
+
+# Local secrets - never commit these
+.env
+*.local
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# NOTE: state.json is deliberately NOT ignored. GitHub Actions commits it back
+# to the repository so the bot remembers which hotels it already alerted on.

@@ -1,0 +1,93 @@
+name: Hotel Price Check
+
+on:
+  # Automatic runs. Times are UTC.
+  # "0 */8 * * *" = every 8 hours (00:00, 08:00, 16:00 UTC) = 3 runs a day.
+  #
+  # To change how often it runs, edit the line below:
+  #   every 12 hours -> "0 */12 * * *"
+  #   once a day     -> "0 13 * * *"
+  #   every 6 hours  -> "0 */6 * * *"
+  # Careful: more runs = more SerpApi searches = more of your monthly quota.
+  schedule:
+    - cron: "0 */8 * * *"
+
+  # Lets you press the "Run workflow" button in the Actions tab.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Find hotels but do NOT send Discord messages"
+        type: boolean
+        default: false
+      test_discord:
+        description: "Send one sample alert to check the webhook works"
+        type: boolean
+        default: false
+
+# Needed so the bot can commit state.json back (this is what stops it
+# from sending you the same hotel over and over).
+permissions:
+  contents: write
+
+# If a run is already going, do not start a second one on top of it.
+concurrency:
+  group: hotel-price-check
+  cancel-in-progress: false
+
+jobs:
+  check-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the tests
+        run: pytest -q
+
+      - name: Send a test Discord message
+        if: inputs.test_discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python hotel_tracker.py --test-discord
+
+      - name: Check hotel prices
+        if: ${{ !inputs.test_discord }}
+        env:
+          # Secrets are masked by GitHub and never printed by the bot.
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+          # ---- optional tuning (all have sensible defaults) ----
+          # The $2,000 threshold. A total must be strictly UNDER this.
+          MAX_TOTAL_PRICE_USD: "2000"
+          # How many dollars cheaper a hotel must get before you are told again.
+          MIN_DROP_USD: "50"
+          # Number of guests.
+          ADULTS: "2"
+          # SerpApi result pages per query. Each page costs one search credit.
+          MAX_PAGES: "2"
+        run: python hotel_tracker.py ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Remember which hotels were already reported
+        if: ${{ !inputs.test_discord && !inputs.dry_run }}
+        run: |
+          if [[ -n "$(git status --porcelain state.json)" ]]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update hotel price history [skip ci]"
+            git push
+          else
+            echo "No price history changes to save."
+          fi
