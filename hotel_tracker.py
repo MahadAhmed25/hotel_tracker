@@ -1240,8 +1240,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not settings.serpapi_key:
         print("[error] SERPAPI_KEY is not set. Add it as a GitHub Actions secret.")
         return 1
-    if not settings.discord_webhook_url and not args.dry_run:
-        print("[error] DISCORD_WEBHOOK_URL is not set. Add it as a GitHub Actions secret.")
+    # --dry-run and --debug-hotel never post anything, so they do not need a
+    # webhook. Only a real run does.
+    if not settings.discord_webhook_url and not args.dry_run and not args.debug_hotel:
+        print(
+            "[error] DISCORD_WEBHOOK_URL is not set. Set it in your shell to run "
+            "locally, or add it as a GitHub Actions secret."
+        )
         return 1
 
     print(f"Searching {CHECK_IN_DATE} → {CHECK_OUT_DATE} ({NIGHTS} nights), "
