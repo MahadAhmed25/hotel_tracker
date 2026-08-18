@@ -537,6 +537,88 @@ def extract_offers(hotel: dict[str, Any], required_guests: Optional[int] = None)
     return offers
 
 
+def _coerce_guests(raw: Any) -> Optional[int]:
+    """`num_guests` arrives as an int in some places and a string in others."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    if isinstance(raw, str):
+        match = re.search(r"\d+", raw)
+        if match:
+            return int(match.group())
+    return None
+
+
+def offers_from_details(
+    details: dict[str, Any], required_guests: Optional[int] = None
+) -> list[Offer]:
+    """
+    Real, bookable offers from a Property Details payload.
+
+    Unlike the search response, every offer here can be attributed to a named
+    provider and (usually) a stated occupancy, so these are the numbers we are
+    willing to put in an alert.
+    """
+    offers: list[Offer] = []
+    if not isinstance(details, dict):
+        return offers
+
+    for key in ("featured_prices", "prices"):
+        entries = details.get(key)
+        if not isinstance(entries, list):
+            continue
+
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+
+            source = str(entry.get("source") or "").strip() or "Unknown provider"
+            entry_link = entry.get("link") if isinstance(entry.get("link"), str) else None
+            entry_guests = _coerce_guests(entry.get("num_guests"))
+
+            # Room-level offers are the most precise thing the API gives us.
+            room_offers: list[Offer] = []
+            rooms = entry.get("rooms")
+            if isinstance(rooms, list):
+                for room in rooms:
+                    if not isinstance(room, dict):
+                        continue
+                    guests = _coerce_guests(room.get("num_guests"))
+                    if guests is None:
+                        guests = entry_guests
+                    if required_guests and guests is not None and guests < required_guests:
+                        continue
+                    room_name = str(room.get("name") or "").strip()
+                    offer = _offer_from_rates(
+                        provider=f"{source} — {room_name}" if room_name else source,
+                        total_rate=room.get("total_rate"),
+                        rate_per_night=room.get("rate_per_night"),
+                        link=room.get("link") if isinstance(room.get("link"), str) else entry_link,
+                        num_guests=guests,
+                    )
+                    if offer:
+                        room_offers.append(offer)
+
+            if room_offers:
+                offers.extend(room_offers)
+                continue
+
+            if required_guests and entry_guests is not None and entry_guests < required_guests:
+                continue
+            offer = _offer_from_rates(
+                provider=source,
+                total_rate=entry.get("total_rate"),
+                rate_per_night=entry.get("rate_per_night"),
+                link=entry_link,
+                num_guests=entry_guests,
+            )
+            if offer:
+                offers.append(offer)
+
+    return offers
+
+
 def pick_best_offer(offers: list[Offer], threshold: float) -> tuple[Optional[Offer], list[Offer]]:
     """
     Choose the cheapest qualifying offer for a hotel.
@@ -638,6 +720,7 @@ class Settings:
     max_pages: int = DEFAULT_MAX_PAGES
     max_alerts_per_run: int = DEFAULT_MAX_ALERTS_PER_RUN
     fetch_details: bool = True
+    require_verified_price: bool = True
     queries: list[str] = field(default_factory=lambda: list(DEFAULT_SEARCH_QUERIES))
 
     @classmethod
@@ -658,6 +741,7 @@ class Settings:
             max_pages=max(1, _env_int("MAX_PAGES", DEFAULT_MAX_PAGES)),
             max_alerts_per_run=_env_int("MAX_ALERTS_PER_RUN", DEFAULT_MAX_ALERTS_PER_RUN),
             fetch_details=_env_bool("FETCH_ADDRESS_DETAILS", True),
+            require_verified_price=_env_bool("REQUIRE_VERIFIED_PRICE", True),
             queries=queries,
         )
 
@@ -771,11 +855,20 @@ def search_hotels(session: requests.Session, settings: Settings) -> list[dict[st
     return list(collected.values())
 
 
-def fetch_address(session: requests.Session, settings: Settings, hotel: dict[str, Any]) -> Optional[str]:
+def fetch_property_details(
+    session: requests.Session, settings: Settings, hotel: dict[str, Any]
+) -> Optional[dict[str, Any]]:
     """
-    Optional enrichment: the Property Details endpoint has a street address,
-    the search endpoint does not. Costs one extra SerpApi credit, so this only
-    runs for hotels that already passed geography and price.
+    Fetch the Property Details payload for one hotel.
+
+    This is where the truth lives. Search results carry only Google's headline
+    "from" price - a teaser for the cheapest bed or room, with no occupancy
+    attached. Property Details carries the actual bookable offers
+    (`featured_prices[].rooms[]`, `prices[]`) complete with `num_guests`, plus
+    the street address.
+
+    Costs one SerpApi credit, so it only runs for hotels that already passed
+    geography and the preliminary price screen.
     """
     token = hotel.get("property_token")
     if not settings.fetch_details or not isinstance(token, str) or not token:
@@ -794,13 +887,10 @@ def fetch_address(session: requests.Session, settings: Settings, hotel: dict[str
         "api_key": settings.serpapi_key,
     }
     try:
-        payload = _serpapi_get(session, params)
+        return _serpapi_get(session, params)
     except SerpApiError as exc:
-        print(f"[warn] could not fetch address details: {exc}")
+        print(f"[warn] could not fetch property details: {exc}")
         return None
-
-    address = payload.get("address")
-    return address.strip() if isinstance(address, str) and address.strip() else None
 
 
 # ---------------------------------------------------------------------------
@@ -1152,11 +1242,22 @@ def process_hotels(
                 print(f"[quiet]      {name}: hit MAX_ALERTS_PER_RUN, will retry next run")
                 continue
 
+            if dry_run:
+                print(
+                    f"[dry-run]    ALERT {name}: ${best.total:,.2f} ({best.kind}) — {why} "
+                    "(unverified: dry runs skip the details lookup)"
+                )
+                continue
+
+            # The search price is only a screen. Before telling anyone about
+            # it, confirm it against the real bookable offers.
             address = None
-            if not dry_run:
-                address = fetch_address(session, settings, hotel)
-                if address:
-                    # Last sanity check now that we finally have street text.
+            details = fetch_property_details(session, settings, hotel)
+            if details:
+                raw_address = details.get("address")
+                if isinstance(raw_address, str) and raw_address.strip():
+                    address = raw_address.strip()
+                    # Last geography check, now that we finally have street text.
                     enriched = dict(hotel)
                     enriched["address"] = address
                     accepted, reason = is_valid_manhattan_hotel(enriched)
@@ -1165,11 +1266,58 @@ def process_hotels(
                         print(f"[skip-geo]   {name}: address check failed — {reason}")
                         continue
 
-            payload = build_discord_payload(hotel, best, others, address, settings)
+                verified = offers_from_details(details, required_guests=settings.adults)
+                if verified:
+                    v_best, v_others = pick_best_offer(verified, threshold)
+                    if v_best is None:
+                        cheapest = min(o.total for o in verified)
+                        rejected_price += 1
+                        print(
+                            f"[skip-price] {name}: screened at ${best.total:,.2f} but the real "
+                            f"bookable price is ${cheapest:,.2f} — not under ${threshold:,.0f}"
+                        )
+                        record = dict(previous or {})
+                        record.update({
+                            "name": name,
+                            "last_seen_total": cheapest,
+                            "last_seen_at": now_iso,
+                            "below_threshold": False,
+                        })
+                        hotels_state[key] = record
+                        continue
 
-            if dry_run:
-                print(f"[dry-run]    ALERT {name}: ${best.total:,.2f} ({best.kind}) — {why}")
+                    if abs(v_best.total - best.total) >= 1.0:
+                        print(
+                            f"[verify]     {name}: search said ${best.total:,.2f}, "
+                            f"real offer is ${v_best.total:,.2f} ({v_best.provider})"
+                        )
+                    best, others = v_best, v_others
+
+                    # The suppression decision must use the verified price.
+                    alert, why = should_alert(previous, best.total, settings)
+                    if not alert:
+                        suppressed += 1
+                        print(f"[quiet]      {name}: ${best.total:,.2f} — {why}")
+                        record = dict(previous or {})
+                        record.update({
+                            "name": name,
+                            "last_seen_total": best.total,
+                            "last_seen_at": now_iso,
+                            "below_threshold": True,
+                        })
+                        hotels_state[key] = record
+                        continue
+                elif settings.require_verified_price:
+                    print(
+                        f"[skip-price] {name}: ${best.total:,.2f} is an unverified Google "
+                        "'from' price with no bookable offer behind it"
+                    )
+                    continue
+            elif settings.require_verified_price:
+                print(f"[skip-price] {name}: could not verify the price; not alerting")
                 continue
+
+            payload = build_discord_payload(hotel, best, others, address, settings)
 
             if send_discord(session, settings.discord_webhook_url, payload):
                 alerts_sent += 1
@@ -1299,7 +1447,37 @@ def main(argv: Optional[list[str]] = None) -> int:
                 extract_offers(match, required_guests=settings.adults),
                 settings.max_total_price_usd,
             )
-            print(f"  -> chosen: {best.provider} ${best.total:,.2f}" if best else "  -> nothing qualifies")
+            print(f"  -> screened as: {best.provider} ${best.total:,.2f}" if best
+                  else "  -> nothing qualifies from search data")
+
+            print("\nVERIFIED BOOKABLE OFFERS (Property Details API, 1 credit):")
+            details = fetch_property_details(session, settings, match)
+            if not details:
+                print("  (details lookup failed)")
+                continue
+
+            address = details.get("address")
+            if isinstance(address, str):
+                print(f"  address: {address}")
+
+            verified = offers_from_details(details, required_guests=settings.adults)
+            if not verified:
+                print("  none — no bookable offer backs the headline price.")
+                print(f"  raw keys returned: {sorted(details.keys())}")
+                continue
+
+            for offer in sorted(verified, key=lambda o: o.total):
+                guests = offer.num_guests if offer.num_guests is not None else "not stated"
+                print(
+                    f"  {offer.provider[:44]:<44} ${offer.total:>9,.2f} "
+                    f"{offer.kind:<9} guests={guests}"
+                )
+            v_best, _ = pick_best_offer(verified, settings.max_total_price_usd)
+            print(
+                f"  -> WOULD ALERT: {v_best.provider} ${v_best.total:,.2f}"
+                if v_best
+                else f"  -> no alert: nothing under ${settings.max_total_price_usd:,.0f}"
+            )
         return 0
 
     state = load_state()

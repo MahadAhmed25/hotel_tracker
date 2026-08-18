@@ -281,10 +281,24 @@ people is $1,922. Three defences:
 1. **Hostels and shared accommodation are rejected outright.** They price per
    bed, so their "total" is a per-person number that cannot be compared to a
    room-for-two budget.
-2. **An uncorroborated headline price is discarded.** If named providers quote
-   the hotel and the headline figure sits more than 10% below all of them, the
-   headline is treated as a teaser and ignored in favour of the real quotes.
-3. **Occupancy is enforced** — see below.
+2. **Every alert price is verified against the real bookable offers.** The
+   search price is treated as nothing more than a *screen*. Before anything is
+   sent, the bot calls the Property Details API, which returns the actual
+   offers — named provider, room name, and `num_guests` — and re-prices the
+   hotel from those. If the verified price is not under the threshold, no alert
+   goes out, no matter how cheap the search said it was.
+3. **A price that cannot be verified is never sent** (`REQUIRE_VERIFIED_PRICE`).
+   Ambiguous price data means silence, by design.
+4. **Occupancy is enforced** — see below.
+
+This is why the log sometimes shows a line like:
+
+```
+[verify] Pod 51: search said $1,046.00, real offer is $1,922.00 (Booking.com — Pod Queen)
+```
+
+The details lookup costs one credit, but it only runs for a hotel that is
+about to be alerted on, so duplicate-suppressed hotels cost nothing extra.
 
 ### Occupancy
 
@@ -444,10 +458,11 @@ uses about **12 searches a day**.
 | `MAX_TOTAL_PRICE_USD` | `2000` | Total must be under this |
 | `MIN_DROP_USD` | `50` | How much cheaper before you're told again |
 | `ADULTS` | `2` | Number of guests |
-| `MAX_PAGES` | `4` | SerpApi pages per search, 20 hotels each — **each page costs one credit** |
+| `MAX_PAGES` | `4` | SerpApi pages per search, ~18-20 hotels each — **each page costs one credit** |
 | `RENOTIFY_AFTER_HOURS` | `0` | `0` = never re-alert just because time passed |
 | `MAX_ALERTS_PER_RUN` | `10` | Safety cap on messages per run |
-| `FETCH_ADDRESS_DETAILS` | `true` | Set `false` to save one credit per alert (you lose the street address) |
+| `FETCH_ADDRESS_DETAILS` | `true` | The Property Details lookup that verifies prices and supplies the address. Turning this off makes prices unreliable |
+| `REQUIRE_VERIFIED_PRICE` | `true` | Never alert on a price with no bookable offer behind it. Set `false` only if you would rather see unverified Google "from" prices |
 | `SEARCH_QUERIES` | one query | Extra searches separated by `\|`. **Each one costs credits.** |
 
 ### Changing the dates
@@ -471,7 +486,7 @@ messages read correctly.
 | `requirements.txt` | The two Python packages needed (`requests`, plus `pytest` for the tests). |
 | `state.json` | The price history that stops repeat alerts. Committed automatically by GitHub Actions — do not edit it by hand. |
 | `.github/workflows/hotel-price-check.yml` | The schedule, the **Run workflow** button, and all the settings. |
-| `tests/test_hotel_tracker.py` | 131 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
+| `tests/test_hotel_tracker.py` | 136 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
 | `.gitignore` | Keeps junk out of the repository. Deliberately does **not** ignore `state.json`. |
 | `README.md` | This file. |
 

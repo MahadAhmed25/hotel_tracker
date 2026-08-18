@@ -491,6 +491,67 @@ def test_headline_price_is_kept_when_providers_agree():
     assert best.total == pytest.approx(1850.0), "a corroborated headline price is fine"
 
 
+def test_details_room_offers_beat_the_search_teaser():
+    """Pod 51 for real: search says $1,046, the bookable double is $1,922."""
+    details = {
+        "address": "230 E 51st St, New York, NY 10022",
+        "featured_prices": [
+            {
+                "source": "Booking.com",
+                "link": "https://booking.example/pod51",
+                "rooms": [
+                    {"name": "Pod Single", "num_guests": 1,
+                     "total_rate": rate(1046.0)},
+                    {"name": "Pod Queen", "num_guests": 2,
+                     "total_rate": rate(1922.0)},
+                ],
+            }
+        ],
+    }
+    offers = ht.offers_from_details(details, required_guests=2)
+    assert [o.num_guests for o in offers] == [2], "the single must be filtered out"
+    assert offers[0].total == pytest.approx(1922.0)
+    assert "Pod Queen" in offers[0].provider
+
+
+def test_details_prices_array_is_read_too():
+    details = {
+        "prices": [
+            {"source": "Expedia", "num_guests": "2", "total_rate": rate(1899.0)},
+            {"source": "Solo OTA", "num_guests": "1", "total_rate": rate(950.0)},
+        ]
+    }
+    offers = ht.offers_from_details(details, required_guests=2)
+    assert [o.provider for o in offers] == ["Expedia"]
+    assert offers[0].num_guests == 2
+
+
+def test_num_guests_accepts_strings_and_junk():
+    assert ht._coerce_guests(2) == 2
+    assert ht._coerce_guests("2") == 2
+    assert ht._coerce_guests("2 guests") == 2
+    assert ht._coerce_guests(None) is None
+    assert ht._coerce_guests("many") is None
+    assert ht._coerce_guests(True) is None
+
+
+def test_details_with_no_offers_yields_nothing():
+    assert ht.offers_from_details({}, 2) == []
+    assert ht.offers_from_details({"featured_prices": "nonsense"}, 2) == []
+    assert ht.offers_from_details(None, 2) == []
+
+
+def test_verified_price_can_disqualify_a_hotel_that_screened_as_cheap():
+    details = {
+        "featured_prices": [
+            {"source": "Booking.com", "num_guests": 2, "total_rate": rate(2400.0)}
+        ]
+    }
+    offers = ht.offers_from_details(details, required_guests=2)
+    best, _ = ht.pick_best_offer(offers, 2000.0)
+    assert best is None, "the real price is over the threshold, so no alert"
+
+
 def test_all_in_price_preferred_over_pre_tax_at_the_same_number():
     offers = [
         ht.Offer("Pre-tax Co", 1800.0, ht.ACTUAL, includes_taxes_fees=False),
