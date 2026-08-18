@@ -271,6 +271,21 @@ The API can report a price two ways, and the bot prefers the more complete one:
 - `before_taxes_fees` — a pre-tax figure → used only as a fallback, and then
   the alert is explicitly labelled **"Total before taxes/fees"** with a warning.
 
+### Why a price can look far too cheap
+
+Google's property-level price is a **"from" teaser** — the cheapest bed or room
+it can find, which is often *not* the room you searched for. Left unchecked it
+produces alerts like "Pod 51, $1,046 total" when the actual price for two
+people is $1,922. Three defences:
+
+1. **Hostels and shared accommodation are rejected outright.** They price per
+   bed, so their "total" is a per-person number that cannot be compared to a
+   room-for-two budget.
+2. **An uncorroborated headline price is discarded.** If named providers quote
+   the hotel and the headline figure sits more than 10% below all of them, the
+   headline is treated as a teaser and ignored in favour of the real quotes.
+3. **Occupancy is enforced** — see below.
+
 ### Occupancy
 
 Google Hotels lists cheap **single-occupancy** rates next to double rates,
@@ -456,7 +471,7 @@ messages read correctly.
 | `requirements.txt` | The two Python packages needed (`requests`, plus `pytest` for the tests). |
 | `state.json` | The price history that stops repeat alerts. Committed automatically by GitHub Actions — do not edit it by hand. |
 | `.github/workflows/hotel-price-check.yml` | The schedule, the **Run workflow** button, and all the settings. |
-| `tests/test_hotel_tracker.py` | 126 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
+| `tests/test_hotel_tracker.py` | 131 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
 | `.gitignore` | Keeps junk out of the repository. Deliberately does **not** ignore `state.json`. |
 | `README.md` | This file. |
 

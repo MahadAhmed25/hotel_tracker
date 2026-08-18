@@ -185,6 +185,20 @@ NEUTRAL_LANDMARK_PHRASES = [
 ]
 
 
+# Shared accommodation is priced per BED, not per room, so its "total" is a
+# per-person figure that cannot be compared to a room-for-two budget.
+EXCLUDED_ACCOMMODATION_KEYWORDS = [
+    "hostel", "hostal", "dormitory", "dorm bed", "shared room",
+    "shared dorm", "bunk bed", "capsule hotel", "backpacker",
+]
+
+# How far below the cheapest named provider quote a headline "from" price may
+# sit before we stop believing it refers to the same room. Google's headline
+# figure is a teaser for the cheapest available bed/room and often is not the
+# price for the occupancy we asked for.
+HEADLINE_CORROBORATION_RATIO = 0.9
+
+
 def point_in_polygon(lat: float, lon: float, polygon: list[tuple[float, float]]) -> bool:
     """Standard ray-casting test. `polygon` is a list of (lat, lon) vertices."""
     inside = False
@@ -267,6 +281,15 @@ def is_valid_manhattan_hotel(hotel: dict[str, Any]) -> tuple[bool, str]:
 
     if point_in_polygon(lat, lon, ROOSEVELT_ISLAND_POLYGON):
         return False, "Roosevelt Island is not Manhattan Island"
+
+    # --- 4b. shared accommodation prices per bed, not per room -------------
+    lowered = f" {name.lower()} "
+    for word in EXCLUDED_ACCOMMODATION_KEYWORDS:
+        if word in lowered:
+            return False, f"shared accommodation ({word}) is priced per bed, not per room"
+
+    if str(hotel.get("type") or "").strip().lower() == "vacation rental":
+        return False, "vacation rental, not a hotel"
 
     # --- 5. text blocklist on whatever location text we have ---------------
     # `description` is deliberately excluded: it is marketing copy about
@@ -527,6 +550,19 @@ def pick_best_offer(offers: list[Offer], threshold: float) -> tuple[Optional[Off
     """
     if not offers:
         return None, []
+
+    # Google's property-level "from" price advertises the cheapest bed or room
+    # it can find, which is frequently a single-occupancy or dorm rate rather
+    # than the room we searched for. Believe it only when a named provider
+    # quotes something comparable; otherwise it is not a price for our stay.
+    named = [o for o in offers if not o.is_headline]
+    if named:
+        cheapest_named = min(o.total for o in named)
+        offers = [
+            o
+            for o in offers
+            if not o.is_headline or o.total >= cheapest_named * HEADLINE_CORROBORATION_RATIO
+        ]
 
     actuals = [o for o in offers if o.kind == ACTUAL]
     considered = actuals if actuals else offers

@@ -439,6 +439,58 @@ def test_alert_links_to_google_hotels_with_our_dates():
     assert "hotel-own-site.example" in str(payload)
 
 
+def test_hostels_are_rejected_because_they_price_per_bed():
+    for name in [
+        "HI New York City Hostel",
+        "Chelsea International Hostel",
+        "The Nolita Express Hostel",
+        "NYC Backpacker Dormitory",
+    ]:
+        ok, reason = ht.is_valid_manhattan_hotel(hotel(name, 40.7549, -73.9748))
+        assert not ok, f"{name} should be rejected"
+        assert "per bed" in reason
+
+
+def test_ordinary_hotels_are_not_caught_by_the_hostel_filter():
+    for name in ["Pod 51", "Pod 39", "The Gallivant Times Square", "Hudson Yards Hotel"]:
+        assert accepted(hotel(name, 40.7549, -73.9748)), f"{name} is a real hotel"
+
+
+def test_vacation_rentals_are_rejected():
+    record = hotel("Cosy Loft", 40.7549, -73.9748)
+    record["type"] = "vacation rental"
+    assert not accepted(record)
+
+
+def test_uncorroborated_headline_from_price_is_distrusted():
+    """The Pod 51 failure: a $262/night 'from' price no provider actually offers."""
+    record = hotel(
+        "Pod 51",
+        40.7549,
+        -73.9748,
+        total_rate=rate(1046.0),   # Google's teaser "from" price
+        prices=[
+            {"source": "Booking.com", "num_guests": 2, "total_rate": rate(1922.0)},
+            {"source": "Expedia", "num_guests": 2, "total_rate": rate(1950.0)},
+        ],
+    )
+    best, _ = ht.pick_best_offer(ht.extract_offers(record, required_guests=2), 2000.0)
+    assert best.provider == "Booking.com"
+    assert best.total == pytest.approx(1922.0), "must not quote the unbacked $1,046"
+
+
+def test_headline_price_is_kept_when_providers_agree():
+    record = hotel(
+        "Honest Hotel",
+        40.7549,
+        -73.9748,
+        total_rate=rate(1850.0),
+        prices=[{"source": "Booking.com", "num_guests": 2, "total_rate": rate(1900.0)}],
+    )
+    best, _ = ht.pick_best_offer(ht.extract_offers(record, required_guests=2), 2000.0)
+    assert best.total == pytest.approx(1850.0), "a corroborated headline price is fine"
+
+
 def test_all_in_price_preferred_over_pre_tax_at_the_same_number():
     offers = [
         ht.Offer("Pre-tax Co", 1800.0, ht.ACTUAL, includes_taxes_fees=False),
