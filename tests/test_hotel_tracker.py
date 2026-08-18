@@ -804,3 +804,99 @@ def test_full_pipeline_only_alerts_on_cheap_manhattan_hotels():
         ("FiDi Bargain", 1850.0, ht.ACTUAL),
         ("UES Estimate", 1900.0, ht.ESTIMATED),
     ]
+
+
+# ---------------------------------------------------------------------------
+# beds - four travellers need two real beds
+# ---------------------------------------------------------------------------
+
+
+def test_party_of_four_is_the_default():
+    s = ht.Settings()
+    assert s.adults == 4
+    assert s.min_large_beds == 2
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("Room, 2 Queen Beds", 2),
+        ("Deluxe Room with Two Double Beds", 2),
+        ("2 Double Beds, City View", 2),
+        ("Double-Double Room", 2),
+        ("Room, 1 King Bed", 1),
+        ("King Room with Garden View", 1),
+        ("Queen Room", 1),
+        ("Standard Room", None),
+        ("", None),
+    ],
+)
+def test_bed_counting_from_room_names(name, expected):
+    assert ht._count_large_beds_from_text(name) == expected
+
+
+def test_bed_counting_prefers_structured_data():
+    room = {
+        "name": "Standard Room",
+        "rates": [{"beds": [{"type": "Queen", "count": 2}]}],
+    }
+    assert ht.count_large_beds(room) == 2
+
+
+def test_twin_and_sofa_beds_do_not_count():
+    room = {"rates": [{"beds": [
+        {"type": "King", "count": 1},
+        {"type": "Sofa bed", "count": 1},
+        {"type": "Twin", "count": 2},
+    ]}]}
+    assert ht.count_large_beds(room) == 1, "only the king is an adult-sized bed"
+
+
+def test_one_king_plus_sofa_is_rejected_for_four():
+    details = {"featured_prices": [{"source": "Booking.com", "rooms": [
+        {"name": "Room, 1 King Bed", "num_guests": 4,
+         "rates": [{"beds": [{"type": "King", "count": 1},
+                             {"type": "Sofa bed", "count": 1}]}],
+         "total_rate": rate(1500.0)},
+        {"name": "Room, 2 Queen Beds", "num_guests": 4,
+         "rates": [{"beds": [{"type": "Queen", "count": 2}]}],
+         "total_rate": rate(1900.0)},
+    ]}]}
+    offers = ht.offers_from_details(details, required_guests=4, min_large_beds=2)
+    assert len(offers) == 1
+    assert "2 Queen Beds" in offers[0].provider
+    assert offers[0].total == pytest.approx(1900.0)
+    assert offers[0].large_beds == 2
+
+
+def test_room_that_sleeps_two_is_rejected_for_a_party_of_four():
+    details = {"featured_prices": [{"source": "Booking.com", "rooms": [
+        {"name": "Room, 2 Queen Beds", "num_guests": 2, "total_rate": rate(1200.0)},
+    ]}]}
+    assert ht.offers_from_details(details, required_guests=4, min_large_beds=2) == []
+
+
+def test_unstated_beds_allowed_when_the_room_sleeps_everyone():
+    details = {"featured_prices": [{"source": "Booking.com", "rooms": [
+        {"name": "Family Suite", "num_guests": 4, "total_rate": rate(1800.0)},
+    ]}]}
+    offers = ht.offers_from_details(details, required_guests=4, min_large_beds=2)
+    assert len(offers) == 1
+    assert offers[0].large_beds is None
+
+
+def test_alert_warns_when_the_bed_layout_is_unconfirmed():
+    record = hotel("Mystery Beds Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com", 1800.0, ht.ACTUAL, True, num_guests=4, large_beds=None)
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings())
+    assert "queen/double beds" in payload["embeds"][0]["description"]
+    assert "Not stated" in str(payload)
+
+
+def test_alert_states_the_bed_count_when_known():
+    record = hotel("Two Queens Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com — Room, 2 Queen Beds", 1900.0, ht.ACTUAL, True,
+                    num_guests=4, large_beds=2)
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings())
+    assert "2 adult-sized bed(s)" in str(payload)
+    assert payload["embeds"][0].get("description") is None

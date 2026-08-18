@@ -73,8 +73,11 @@ jobs:
           MAX_TOTAL_PRICE_USD: "2000"
           # How many dollars cheaper a hotel must get before you are told again.
           MIN_DROP_USD: "50"
-          # Number of guests.
-          ADULTS: "2"
+          # Number of guests travelling.
+          ADULTS: "4"
+          # Minimum adult-sized beds (queen/double/king) the room must have.
+          # Twins, sofa beds and bunks do not count. Set to 0 to disable.
+          MIN_LARGE_BEDS: "2"
           # SerpApi result pages per query (20 hotels per page).
           # Each page costs one search credit.
           MAX_PAGES: "4"

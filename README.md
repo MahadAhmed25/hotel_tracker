@@ -8,6 +8,7 @@ message when a hotel's **total price for the whole stay is under $2,000 USD**.
 | **Check-in**     | Friday, 4 September 2026                     |
 | **Check-out**    | Tuesday, 8 September 2026                    |
 | **Nights**       | 4                                            |
+| **Party**        | 4 people, room must have 2+ queen/double beds |
 | **Alert when**   | total stay price is **less than $2,000 USD** |
 | **Where**        | **Manhattan Island only**, south of Central Park's northern edge |
 | **Runs**         | Automatically every 8 hours, free, on GitHub |
@@ -457,7 +458,8 @@ uses about **12 searches a day**.
 | ------- | ------- | ------------ |
 | `MAX_TOTAL_PRICE_USD` | `2000` | Total must be under this |
 | `MIN_DROP_USD` | `50` | How much cheaper before you're told again |
-| `ADULTS` | `2` | Number of guests |
+| `ADULTS` | `4` | Number of guests travelling |
+| `MIN_LARGE_BEDS` | `2` | Minimum queen/double/king beds. Twins, sofa beds and bunks do not count. `0` disables the check |
 | `MAX_PAGES` | `4` | SerpApi pages per search, ~18-20 hotels each — **each page costs one credit** |
 | `RENOTIFY_AFTER_HOURS` | `0` | `0` = never re-alert just because time passed |
 | `MAX_ALERTS_PER_RUN` | `10` | Safety cap on messages per run |
@@ -486,7 +488,7 @@ messages read correctly.
 | `requirements.txt` | The two Python packages needed (`requests`, plus `pytest` for the tests). |
 | `state.json` | The price history that stops repeat alerts. Committed automatically by GitHub Actions — do not edit it by hand. |
 | `.github/workflows/hotel-price-check.yml` | The schedule, the **Run workflow** button, and all the settings. |
-| `tests/test_hotel_tracker.py` | 136 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
+| `tests/test_hotel_tracker.py` | 153 tests covering the geography, price and anti-spam rules. They run automatically before every check. |
 | `.gitignore` | Keeps junk out of the repository. Deliberately does **not** ignore `state.json`. |
 | `README.md` | This file. |
 

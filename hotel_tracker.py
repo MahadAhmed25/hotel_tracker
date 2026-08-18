@@ -69,9 +69,11 @@ STAY_LABEL = "September 4–8, 2026 · 4 nights"
 DEFAULT_MAX_TOTAL_PRICE_USD = 2000.0  # strict: total must be < this
 DEFAULT_MIN_DROP_USD = 50.0           # re-alert only after a drop this big
 DEFAULT_RENOTIFY_AFTER_HOURS = 0.0    # 0 = never re-alert just because of time
-DEFAULT_ADULTS = 2
+DEFAULT_ADULTS = 4
 DEFAULT_MAX_PAGES = 2                 # SerpApi pages per query (API budget!)
 DEFAULT_MAX_ALERTS_PER_RUN = 10
+# Four travellers need two adult-sized beds, not one king plus a sofa.
+DEFAULT_MIN_LARGE_BEDS = 2
 
 # One query is usually enough because we sort by price and filter by
 # coordinates afterwards. Each query costs one SerpApi search credit per page.
@@ -381,6 +383,7 @@ class Offer:
     link: Optional[str] = None
     is_headline: bool = False   # the property-level "lowest listed" figure
     num_guests: Optional[int] = None  # None = the API did not say
+    large_beds: Optional[int] = None  # adult-sized beds; None = not stated
 
     @property
     def nightly_display(self) -> float:
@@ -537,6 +540,110 @@ def extract_offers(hotel: dict[str, Any], required_guests: Optional[int] = None)
     return offers
 
 
+# ---------------------------------------------------------------------------
+# 4b. BEDS  --  four travellers need real beds, not one king and a sofa
+# ---------------------------------------------------------------------------
+
+# Bed types that genuinely sleep two adults. Twins, singles, sofa beds, bunks
+# and cots do not count towards the "2 queens / 2 doubles" requirement.
+LARGE_BED_TYPES = ("king", "queen", "double", "full", "matrimonial")
+NOT_A_REAL_BED = ("sofa", "couch", "futon", "bunk", "cot", "rollaway", "trundle",
+                  "day bed", "daybed", "air mattress", "twin", "single")
+
+_WORD_NUMBERS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "a": 1, "an": 1, "double-double": 2,
+}
+
+
+def _count_large_beds_from_structure(beds: Any) -> Optional[int]:
+    """Count real beds from a structured beds array: [{"type","count"}, ...]."""
+    if not isinstance(beds, list) or not beds:
+        return None
+    total = 0
+    saw_any = False
+    for bed in beds:
+        if not isinstance(bed, dict):
+            continue
+        bed_type = str(bed.get("type") or "").strip().lower()
+        if not bed_type:
+            continue
+        saw_any = True
+        if any(bad in bed_type for bad in NOT_A_REAL_BED):
+            continue
+        if not any(good in bed_type for good in LARGE_BED_TYPES):
+            continue
+        try:
+            count = int(bed.get("count") or 1)
+        except (TypeError, ValueError):
+            count = 1
+        total += max(count, 1)
+    return total if saw_any else None
+
+
+def _count_large_beds_from_text(name: str) -> Optional[int]:
+    """Count real beds from a room name like 'Room, 2 Queen Beds'."""
+    if not name:
+        return None
+    low = name.lower()
+
+    if "double-double" in low or "double double" in low:
+        return 2
+
+    total = 0
+    found = False
+    # "2 queen", "two double beds", "1 king"
+    for qty, qualifier, bed_type in re.findall(
+        r"(\d+|one|two|three|four|five)\s+(?:x\s*)?([a-z\- ]{0,12}?)(king|queen|double|full)",
+        low,
+    ):
+        if any(bad in qualifier.strip() for bad in NOT_A_REAL_BED):
+            continue
+        found = True
+        try:
+            total += int(qty)
+        except ValueError:
+            total += _WORD_NUMBERS.get(qty, 1)
+
+    if found:
+        return total
+
+    # No number given: "Queen Room", "King Bed" -> exactly one such bed.
+    for bed_type in LARGE_BED_TYPES:
+        if bed_type in low:
+            return 1
+    return None
+
+
+def count_large_beds(room: dict[str, Any]) -> Optional[int]:
+    """
+    How many adult-sized beds a room has, or None when the API does not say.
+
+    Structured bed data wins; the room name is the fallback.
+    """
+    if not isinstance(room, dict):
+        return None
+
+    best: Optional[int] = None
+    rates = room.get("rates")
+    if isinstance(rates, list):
+        for rate in rates:
+            if not isinstance(rate, dict):
+                continue
+            counted = _count_large_beds_from_structure(rate.get("beds"))
+            if counted is not None:
+                best = counted if best is None else max(best, counted)
+
+    counted = _count_large_beds_from_structure(room.get("beds"))
+    if counted is not None:
+        best = counted if best is None else max(best, counted)
+
+    if best is not None:
+        return best
+
+    return _count_large_beds_from_text(str(room.get("name") or ""))
+
+
 def _coerce_guests(raw: Any) -> Optional[int]:
     """`num_guests` arrives as an int in some places and a string in others."""
     if isinstance(raw, bool):
@@ -551,7 +658,9 @@ def _coerce_guests(raw: Any) -> Optional[int]:
 
 
 def offers_from_details(
-    details: dict[str, Any], required_guests: Optional[int] = None
+    details: dict[str, Any],
+    required_guests: Optional[int] = None,
+    min_large_beds: int = 0,
 ) -> list[Offer]:
     """
     Real, bookable offers from a Property Details payload.
@@ -590,6 +699,16 @@ def offers_from_details(
                     if required_guests and guests is not None and guests < required_guests:
                         continue
                     room_name = str(room.get("name") or "").strip()
+
+                    beds = count_large_beds(room)
+                    if min_large_beds:
+                        if beds is not None and beds < min_large_beds:
+                            continue
+                        # Beds unstated: only trust it if the room at least
+                        # claims to sleep everyone.
+                        if beds is None and guests is None:
+                            continue
+
                     offer = _offer_from_rates(
                         provider=f"{source} — {room_name}" if room_name else source,
                         total_rate=room.get("total_rate"),
@@ -598,6 +717,7 @@ def offers_from_details(
                         num_guests=guests,
                     )
                     if offer:
+                        offer.large_beds = beds
                         room_offers.append(offer)
 
             if room_offers:
@@ -605,6 +725,9 @@ def offers_from_details(
                 continue
 
             if required_guests and entry_guests is not None and entry_guests < required_guests:
+                continue
+            # No room breakdown at all, so the bed layout is unknown.
+            if min_large_beds and entry_guests is None:
                 continue
             offer = _offer_from_rates(
                 provider=source,
@@ -717,6 +840,7 @@ class Settings:
     min_drop_usd: float = DEFAULT_MIN_DROP_USD
     renotify_after_hours: float = DEFAULT_RENOTIFY_AFTER_HOURS
     adults: int = DEFAULT_ADULTS
+    min_large_beds: int = DEFAULT_MIN_LARGE_BEDS
     max_pages: int = DEFAULT_MAX_PAGES
     max_alerts_per_run: int = DEFAULT_MAX_ALERTS_PER_RUN
     fetch_details: bool = True
@@ -738,6 +862,7 @@ class Settings:
                 "RENOTIFY_AFTER_HOURS", DEFAULT_RENOTIFY_AFTER_HOURS
             ),
             adults=_env_int("ADULTS", DEFAULT_ADULTS),
+            min_large_beds=_env_int("MIN_LARGE_BEDS", DEFAULT_MIN_LARGE_BEDS),
             max_pages=max(1, _env_int("MAX_PAGES", DEFAULT_MAX_PAGES)),
             max_alerts_per_run=_env_int("MAX_ALERTS_PER_RUN", DEFAULT_MAX_ALERTS_PER_RUN),
             fetch_details=_env_bool("FETCH_ADDRESS_DETAILS", True),
@@ -1055,6 +1180,16 @@ def build_discord_payload(
             ),
             "inline": True,
         },
+        {
+            "name": "Beds",
+            "value": (
+                f"{best.large_beds} adult-sized bed(s)"
+                if best.large_beds is not None
+                else f"⚠️ Not stated — confirm it has {settings.min_large_beds} "
+                     "queens/doubles"
+            ),
+            "inline": True,
+        },
         {"name": "Price type", "value": best.price_type_label(), "inline": False},
     ]
 
@@ -1102,6 +1237,17 @@ def build_discord_payload(
             "⚠️ This is a real stay total, but the API flagged it as "
             "**before taxes & fees**. The checkout price will be higher."
         )
+
+    if settings.min_large_beds and best.large_beds is None:
+        bed_warning = (
+            "The API did not state the bed layout. It sleeps "
+            f"{best.num_guests or settings.adults}, but **confirm it has "
+            f"{settings.min_large_beds} queen/double beds** before booking."
+        )
+        if description:
+            description = description + "\n\n" + bed_warning
+        else:
+            description = bed_warning
 
     embed: dict[str, Any] = {
         "title": str(hotel.get("name") or "Hotel"),
@@ -1151,12 +1297,14 @@ def sample_payload(settings: Settings) -> dict[str, Any]:
         "link": "https://www.google.com/travel/search?q=example+hotel+new+york",
     }
     best = Offer(
-        provider="Booking.com",
+        provider="Booking.com — Room, 2 Queen Beds",
         total=1850.00,
         kind=ACTUAL,
         includes_taxes_fees=True,
         nightly=462.50,
         link=hotel["link"],
+        num_guests=4,
+        large_beds=2,
     )
     others = [Offer("Expedia", 1975.00, ACTUAL, True, 493.75, hotel["link"])]
     return build_discord_payload(hotel, best, others, "123 Example Street, New York, NY 10004", settings)
@@ -1266,7 +1414,11 @@ def process_hotels(
                         print(f"[skip-geo]   {name}: address check failed — {reason}")
                         continue
 
-                verified = offers_from_details(details, required_guests=settings.adults)
+                verified = offers_from_details(
+                        details,
+                        required_guests=settings.adults,
+                        min_large_beds=settings.min_large_beds,
+                    )
                 if verified:
                     v_best, v_others = pick_best_offer(verified, threshold)
                     if v_best is None:
@@ -1367,6 +1519,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Nights              : {NIGHTS}")
         print(f"Threshold           : total < ${settings.max_total_price_usd:,.2f} USD")
         print(f"Adults              : {settings.adults}")
+        print(f"Min adult-sized beds: {settings.min_large_beds}")
         print(f"Queries             : {settings.queries}")
         print(f"Pages per query     : {settings.max_pages}")
         print(f"Min re-alert drop   : ${settings.min_drop_usd:,.2f}")
@@ -1460,7 +1613,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             if isinstance(address, str):
                 print(f"  address: {address}")
 
-            verified = offers_from_details(details, required_guests=settings.adults)
+            verified = offers_from_details(
+                details, required_guests=settings.adults,
+                min_large_beds=settings.min_large_beds,
+            )
             if not verified:
                 print("  none — no bookable offer backs the headline price.")
                 print(f"  raw keys returned: {sorted(details.keys())}")
@@ -1468,9 +1624,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
             for offer in sorted(verified, key=lambda o: o.total):
                 guests = offer.num_guests if offer.num_guests is not None else "not stated"
+                beds = offer.large_beds if offer.large_beds is not None else "?"
                 print(
                     f"  {offer.provider[:44]:<44} ${offer.total:>9,.2f} "
-                    f"{offer.kind:<9} guests={guests}"
+                    f"{offer.kind:<9} guests={guests} large_beds={beds}"
                 )
             v_best, _ = pick_best_offer(verified, settings.max_total_price_usd)
             print(
