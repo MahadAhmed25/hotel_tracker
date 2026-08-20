@@ -2,6 +2,7 @@
 
 Watches Google Hotels prices for **one specific trip** and sends you a Discord
 message when a hotel's **total price for the whole stay is under $2,000 USD**.
+Alerts are shown to you in **Canadian dollars**.
 
 |                  |                                              |
 | ---------------- | -------------------------------------------- |
@@ -9,7 +10,8 @@ message when a hotel's **total price for the whole stay is under $2,000 USD**.
 | **Check-out**    | Tuesday, 8 September 2026                    |
 | **Nights**       | 4                                            |
 | **Party**        | 4 people, room must have 2+ queen/double beds |
-| **Alert when**   | total stay price is **less than $2,000 USD** |
+| **Alert when**   | total stay price is **less than $2,000 USD** (about CA$2,750) |
+| **You see**      | **CAD**, converted at the day's rate, with the USD figure beside it |
 | **Where**        | **Manhattan Island only**, south of Central Park's northern edge |
 | **Runs**         | Automatically every 8 hours, free, on GitHub |
 
@@ -318,13 +320,49 @@ link therefore goes to the Google Hotels comparison **carrying your dates**, so
 the quoted price is actually checkable. The hotel's own site is included as a
 clearly-labelled second link.
 
-### Currency
+### Currency — compared in USD, shown to you in CAD
 
-Everything is compared in **US dollars**. The bot asks SerpApi for USD, checks
-that the response actually came back in USD, and additionally checks that each
-price string is a plain US dollar amount. `CA$1,850`, `A$1,850`, `MX$1,850`,
-`€1,850` and `HK$1,850` all fail that check and are **discarded rather than
-guessed at** — a `$` sign on its own proves nothing.
+**Google Hotels prices are US dollars.** That is what the bot asks SerpApi for,
+and it is strict about it: it checks the response really did come back in USD,
+and it checks that each individual price string is a plain US dollar amount.
+`CA$1,850`, `A$1,850`, `MX$1,850`, `€1,850` and `HK$1,850` all fail that check
+and are **discarded rather than guessed at** — a `$` sign on its own proves
+nothing.
+
+Everything downstream of that — the threshold, the "has it dropped $50?"
+comparison, and the price history in `state.json` — also stays in USD. That is
+deliberate. If history were stored in CAD, a hotel whose US price never moved
+would look like it had risen or fallen every time the exchange rate wobbled,
+and you would get junk alerts.
+
+**The conversion to CAD happens at the very last step, for display only.** Every
+figure in your Discord alert is Canadian dollars:
+
+```
+💰 Total (CAD)
+**CA$2,547.45  ·  US$1,850.00**
+_threshold CA$2,754.00_
+
+Nightly    CA$636.86/night × 4 nights
+```
+
+The rate is fetched once per run from [frankfurter.app](https://frankfurter.app)
+(European Central Bank data), falling back to
+[open.er-api.com](https://open.er-api.com) if that is down. Neither needs an API
+key or costs anything. The exact rate used is printed at the bottom of every
+alert, so you can always check the maths.
+
+Two safety rules:
+
+- A rate outside **1.00–2.00 CAD per USD** is rejected as garbage. This catches
+  the nasty case where a source returns the *inverted* rate (0.73), which would
+  quietly turn a $1,850 hotel into "CA$1,350" and look completely plausible.
+- If **both** sources fail, the alert is still sent, but in US dollars, with a
+  warning at the top saying so. The bot will not invent a rate.
+
+> The bank rate is not the card rate. Your credit card will add roughly 2.5% on
+> top of the figures shown. Treat the CAD number as "close enough to judge", not
+> as the exact amount that will hit your statement.
 
 ---
 
@@ -456,7 +494,8 @@ uses about **12 searches a day**.
 
 | Setting | Default | What it does |
 | ------- | ------- | ------------ |
-| `MAX_TOTAL_PRICE_USD` | `2000` | Total must be under this |
+| `MAX_TOTAL_PRICE_USD` | `2000` | Total must be under this, **in USD** |
+| `MAX_TOTAL_PRICE_CAD` | `0` (off) | Set a budget in **CAD** instead. Converted to USD at the live rate each run and used in place of `MAX_TOTAL_PRICE_USD`. If no rate can be fetched the run stops rather than guess |
 | `MIN_DROP_USD` | `50` | How much cheaper before you're told again |
 | `ADULTS` | `4` | Number of guests travelling |
 | `MIN_LARGE_BEDS` | `2` | Minimum queen/double/king beds. Twins, sofa beds and bunks do not count. `0` disables the check |

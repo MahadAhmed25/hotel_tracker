@@ -899,4 +899,166 @@ def test_alert_states_the_bed_count_when_known():
                     num_guests=4, large_beds=2)
     payload = ht.build_discord_payload(record, best, [], None, ht.Settings())
     assert "2 adult-sized bed(s)" in str(payload)
-    assert payload["embeds"][0].get("description") is None
+    # Nothing to warn about, so the description holds the currency note alone.
+    assert "warn" not in payload["embeds"][0]["description"].lower()
+    assert "confirm" not in payload["embeds"][0]["description"].lower()
+
+
+# ---------------------------------------------------------------------------
+# CAD conversion
+# ---------------------------------------------------------------------------
+
+
+def test_fx_rate_converts_usd_to_cad():
+    fx = ht.FxRate(rate=1.40, source="test")
+    assert fx.ok
+    assert fx.to_cad(1000.0) == pytest.approx(1400.0)
+    assert fx.to_usd(1400.0) == pytest.approx(1000.0)
+
+
+def test_fx_rate_formats_cad_first_but_keeps_the_usd_figure():
+    fx = ht.FxRate(rate=1.40, source="test")
+    assert fx.short(1850.0) == "CA$2,590.00"
+    assert "CA$2,590.00" in fx.both(1850.0)
+    assert "US$1,850.00" in fx.both(1850.0)
+
+
+def test_fx_rate_without_a_rate_never_pretends_to_be_cad():
+    fx = ht.FxRate()
+    assert not fx.ok
+    assert fx.to_cad(1000.0) is None
+    assert fx.short(1850.0) == "US$1,850.00"
+    assert "CA$" not in fx.both(1850.0)
+    assert "US dollars" in fx.note()
+
+
+def test_alert_shows_cad_as_the_headline_figure():
+    record = hotel("CAD Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com", 1850.0, ht.ACTUAL, True, 462.50,
+                    num_guests=4, large_beds=2)
+    fx = ht.FxRate(rate=1.40, source="test")
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings(), fx)
+    blob = str(payload)
+    # 1850 USD -> 2590 CAD, and the nightly follows the same conversion.
+    assert "CA$2,590.00" in blob
+    assert "CA$647.50/night" in blob
+    # the US figure it came from is still on screen, and so is the rate
+    assert "US$1,850.00" in blob
+    assert "1.4000 CAD" in payload["embeds"][0]["description"]
+
+
+def test_alert_threshold_is_shown_in_cad_too():
+    record = hotel("CAD Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com", 1850.0, ht.ACTUAL, True)
+    fx = ht.FxRate(rate=1.40, source="test")
+    blob = str(ht.build_discord_payload(record, best, [], None, ht.Settings(), fx))
+    assert "threshold CA$2,800.00" in blob  # 2000 USD budget
+
+
+def test_competing_provider_prices_are_converted_as_well():
+    record = hotel("CAD Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com", 1850.0, ht.ACTUAL, True)
+    others = [ht.Offer("Expedia", 1900.0, ht.ACTUAL, True)]
+    fx = ht.FxRate(rate=1.40, source="test")
+    blob = str(ht.build_discord_payload(record, best, others, None, ht.Settings(), fx))
+    assert "CA$2,660.00" in blob
+    assert "$1,900.00" not in blob.replace("US$1,900.00", "")
+
+
+def test_alert_says_so_loudly_when_no_cad_rate_was_available():
+    record = hotel("No FX Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Booking.com", 1850.0, ht.ACTUAL, True)
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings(), ht.FxRate())
+    blob = str(payload)
+    assert "CA$" not in blob
+    assert "US$1,850.00" in blob
+    assert "US dollars" in payload["embeds"][0]["description"]
+
+
+def test_estimated_totals_are_converted_too():
+    record = hotel("CAD Hotel", 40.7075, -74.0113)
+    best = ht.Offer("Expedia", 1800.0, ht.ESTIMATED, True, 450.0)
+    fx = ht.FxRate(rate=1.40, source="test")
+    payload = ht.build_discord_payload(record, best, [], None, ht.Settings(), fx)
+    blob = str(payload)
+    assert "CA$2,520.00" in blob          # total
+    assert "CA$630.00" in blob            # nightly, inside the ESTIMATED wording
+    assert "ESTIMATED TOTAL" in blob
+
+
+class _FxResponse:
+    def __init__(self, payload, status=200):
+        self._payload = payload
+        self.status_code = status
+
+    def json(self):
+        if self._payload is None:
+            raise ValueError("not json")
+        return self._payload
+
+
+class _FxSession:
+    def __init__(self, *responses):
+        self._responses = list(responses)
+        self.calls = 0
+
+    def get(self, url, timeout=None):
+        self.calls += 1
+        item = self._responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_fetch_usd_to_cad_reads_the_first_working_provider():
+    session = _FxSession(_FxResponse({"rates": {"CAD": 1.3712}, "date": "2026-08-20"}))
+    fx = ht.fetch_usd_to_cad(session)
+    assert fx.rate == pytest.approx(1.3712)
+    assert session.calls == 1
+
+
+def test_fetch_usd_to_cad_falls_back_to_the_second_provider():
+    session = _FxSession(
+        _FxResponse(None),  # invalid JSON
+        _FxResponse({"rates": {"CAD": 1.39}, "time_last_update_utc": "Thu, 20 Aug 2026"}),
+    )
+    fx = ht.fetch_usd_to_cad(session)
+    assert fx.rate == pytest.approx(1.39)
+    assert session.calls == 2
+
+
+def test_fetch_usd_to_cad_rejects_an_implausible_rate():
+    # 0.73 is the CAD->USD rate, i.e. the conversion inverted. Taking it would
+    # quietly turn every $1,850 alert into "CA$1,350" and look plausible.
+    session = _FxSession(
+        _FxResponse({"rates": {"CAD": 0.73}}),
+        _FxResponse({"rates": {"CAD": 99.0}}),
+    )
+    fx = ht.fetch_usd_to_cad(session)
+    assert not fx.ok
+
+
+def test_fetch_usd_to_cad_survives_total_failure():
+    session = _FxSession(
+        ht.requests.RequestException("boom"),
+        _FxResponse({}, status=500),
+    )
+    fx = ht.fetch_usd_to_cad(session)
+    assert not fx.ok
+    assert fx.rate is None
+
+
+def test_a_cad_budget_is_off_unless_you_ask_for_it(monkeypatch):
+    monkeypatch.delenv("MAX_TOTAL_PRICE_CAD", raising=False)
+    assert ht.Settings.from_env().max_total_price_cad is None
+    monkeypatch.setenv("MAX_TOTAL_PRICE_CAD", "2800")
+    assert ht.Settings.from_env().max_total_price_cad == pytest.approx(2800.0)
+
+
+def test_prices_are_still_compared_in_usd(monkeypatch):
+    # The conversion is a display concern only: state.json and the threshold
+    # stay in USD so history remains comparable when the rate moves.
+    settings = ht.Settings(max_total_price_usd=2000.0)
+    previous = {"last_alert_total": 1900.0, "below_threshold": True}
+    alert, _ = ht.should_alert(previous, 1890.0, settings)
+    assert alert is False

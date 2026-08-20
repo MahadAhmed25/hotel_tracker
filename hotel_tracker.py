@@ -11,6 +11,10 @@ Searches Google Hotels (via SerpApi) for the FIXED stay
 and sends a Discord webhook alert when a hotel's TOTAL price for the whole
 stay is under $2,000 USD.
 
+Prices are fetched, compared and stored in USD, then converted to CAD at a
+live rate purely for display: every figure in the Discord alert is Canadian
+dollars, with the US figure it came from shown beside it.
+
 Design rules (deliberate, do not "optimise" away):
 
   * Geography is judged from GPS coordinates, not from the search query text.
@@ -364,6 +368,107 @@ def is_usd_price_string(text: Any) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# 3b. CAD DISPLAY  --  every figure a human reads is Canadian dollars
+# ---------------------------------------------------------------------------
+#
+# SerpApi is always asked for USD and anything else is discarded (above). That
+# is deliberate: one currency in, one currency compared, one currency stored in
+# state.json, so price history stays comparable no matter what the exchange
+# rate does that week.
+#
+# The conversion to CAD therefore happens at the very last step, in the display
+# layer only. Both sources below are free and need no API key. If BOTH fail we
+# show the US dollar figure and label it as such - inventing a rate would be
+# exactly the kind of guess the rest of this file refuses to make.
+
+FX_PLAUSIBLE_MIN = 1.00   # USD->CAD has not traded below parity since 2013
+FX_PLAUSIBLE_MAX = 2.00
+
+_FX_PROVIDERS: list[tuple[str, str, str]] = [
+    ("frankfurter.app", "https://api.frankfurter.app/latest?from=USD&to=CAD", "date"),
+    ("open.er-api.com", "https://open.er-api.com/v6/latest/USD", "time_last_update_utc"),
+]
+
+
+@dataclass
+class FxRate:
+    """USD -> CAD. `rate is None` means no rate could be fetched this run."""
+
+    rate: Optional[float] = None
+    source: str = ""
+    as_of: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.rate is not None
+
+    def to_cad(self, usd: float) -> Optional[float]:
+        return None if self.rate is None else usd * self.rate
+
+    def to_usd(self, cad: float) -> Optional[float]:
+        return None if self.rate is None else cad / self.rate
+
+    def short(self, usd: float) -> str:
+        """One figure: CAD when we have a rate, honestly labelled when we do not."""
+        if self.rate is None:
+            return f"US${usd:,.2f}"
+        return f"CA${usd * self.rate:,.2f}"
+
+    def both(self, usd: float) -> str:
+        """CAD headline with the underlying US figure kept visible."""
+        if self.rate is None:
+            return f"US${usd:,.2f}"
+        return f"CA${usd * self.rate:,.2f}  ·  US${usd:,.2f}"
+
+    def note(self) -> str:
+        if self.rate is None:
+            return (
+                "⚠️ No USD→CAD rate was available this run, so the figures "
+                "above are **US dollars**, not Canadian."
+            )
+        stamp = f", {self.as_of}" if self.as_of else ""
+        return f"Converted at 1 USD = {self.rate:.4f} CAD ({self.source}{stamp})."
+
+
+def fetch_usd_to_cad(session: requests.Session) -> FxRate:
+    """Live USD->CAD rate, or an empty FxRate. Never raises."""
+    for name, url, stamp_key in _FX_PROVIDERS:
+        try:
+            response = session.get(url, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as exc:
+            print(f"[warn] FX source {name} unreachable: {exc}")
+            continue
+        if response.status_code != 200:
+            print(f"[warn] FX source {name} returned HTTP {response.status_code}")
+            continue
+        try:
+            data = response.json()
+        except ValueError:
+            print(f"[warn] FX source {name} returned invalid JSON")
+            continue
+
+        rates = data.get("rates") if isinstance(data, dict) else None
+        raw = rates.get("CAD") if isinstance(rates, dict) else None
+        try:
+            rate = float(raw)
+        except (TypeError, ValueError):
+            print(f"[warn] FX source {name} did not include a CAD rate")
+            continue
+        if not FX_PLAUSIBLE_MIN <= rate <= FX_PLAUSIBLE_MAX:
+            # An inverted rate (0.73) or a garbled response would silently
+            # distort every price in every alert. Refuse it outright.
+            print(f"[warn] FX source {name} gave an implausible rate {rate}; ignoring")
+            continue
+
+        as_of = str(data.get(stamp_key) or "")
+        print(f"[fx] 1 USD = {rate:.4f} CAD (via {name})")
+        return FxRate(rate=rate, source=name, as_of=as_of)
+
+    print("[warn] No USD→CAD rate available; alerts will show US dollars.")
+    return FxRate()
+
+
+# ---------------------------------------------------------------------------
 # 4. PRICING
 # ---------------------------------------------------------------------------
 
@@ -391,13 +496,14 @@ class Offer:
             return self.nightly
         return self.total / NIGHTS if NIGHTS else self.total
 
-    def price_type_label(self) -> str:
+    def price_type_label(self, fx: Optional["FxRate"] = None) -> str:
+        nightly = (fx or FxRate()).short(self.nightly_display)
         if self.kind == ACTUAL:
             base = "ACTUAL TOTAL — reported by the API for the whole stay"
         else:
             base = (
                 f"ESTIMATED TOTAL — calculated from the nightly price "
-                f"(${self.nightly_display:,.2f} × {NIGHTS} nights)"
+                f"({nightly} × {NIGHTS} nights)"
             )
         if not self.includes_taxes_fees:
             base += "\n⚠️ This figure is BEFORE taxes & fees."
@@ -837,6 +943,10 @@ class Settings:
     serpapi_key: str = ""
     discord_webhook_url: str = ""
     max_total_price_usd: float = DEFAULT_MAX_TOTAL_PRICE_USD
+    # Optional. When set, this CAD budget is converted to USD at the live rate
+    # at the start of the run and replaces max_total_price_usd. Off by default,
+    # so the threshold keeps meaning exactly what it has always meant.
+    max_total_price_cad: Optional[float] = None
     min_drop_usd: float = DEFAULT_MIN_DROP_USD
     renotify_after_hours: float = DEFAULT_RENOTIFY_AFTER_HOURS
     adults: int = DEFAULT_ADULTS
@@ -857,6 +967,7 @@ class Settings:
             serpapi_key=os.environ.get("SERPAPI_KEY", "").strip(),
             discord_webhook_url=os.environ.get("DISCORD_WEBHOOK_URL", "").strip(),
             max_total_price_usd=_env_float("MAX_TOTAL_PRICE_USD", DEFAULT_MAX_TOTAL_PRICE_USD),
+            max_total_price_cad=(_env_float("MAX_TOTAL_PRICE_CAD", 0.0) or None),
             min_drop_usd=_env_float("MIN_DROP_USD", DEFAULT_MIN_DROP_USD),
             renotify_after_hours=_env_float(
                 "RENOTIFY_AFTER_HOURS", DEFAULT_RENOTIFY_AFTER_HOURS
@@ -1138,7 +1249,9 @@ def build_discord_payload(
     others: list[Offer],
     address: Optional[str],
     settings: Settings,
+    fx: Optional[FxRate] = None,
 ) -> dict[str, Any]:
+    fx = fx or FxRate()
     coords = hotel.get("gps_coordinates") or {}
     try:
         lat = float(coords.get("latitude"))
@@ -1160,13 +1273,16 @@ def build_discord_payload(
         {"name": "\U0001f4cd Area", "value": area, "inline": True},
         {"name": "\U0001f4c5 Dates", "value": STAY_LABEL, "inline": True},
         {
-            "name": f"\U0001f4b0 {best.total_label()}",
-            "value": f"**${best.total:,.2f}**  (threshold ${settings.max_total_price_usd:,.0f})",
+            "name": f"\U0001f4b0 {best.total_label()} ({'CAD' if fx.ok else 'USD'})",
+            "value": (
+                f"**{fx.both(best.total)}**\n"
+                f"_threshold {fx.short(settings.max_total_price_usd)}_"
+            ),
             "inline": False,
         },
         {
             "name": "Nightly",
-            "value": f"${best.nightly_display:,.2f}/night × {NIGHTS} nights",
+            "value": f"{fx.short(best.nightly_display)}/night × {NIGHTS} nights",
             "inline": True,
         },
         {"name": "Provider", "value": best.provider, "inline": True},
@@ -1190,7 +1306,7 @@ def build_discord_payload(
             ),
             "inline": True,
         },
-        {"name": "Price type", "value": best.price_type_label(), "inline": False},
+        {"name": "Price type", "value": best.price_type_label(fx), "inline": False},
     ]
 
     if address:
@@ -1206,7 +1322,7 @@ def build_discord_payload(
 
     if others:
         lines = [
-            f"• {o.provider}: ${o.total:,.2f} "
+            f"• {o.provider}: {fx.short(o.total)} "
             f"({'actual' if o.kind == ACTUAL else 'estimated'})"
             for o in others[:3]
         ]
@@ -1229,7 +1345,7 @@ def build_discord_payload(
     if best.kind == ESTIMATED:
         description = (
             f"⚠️ This total is **estimated** from the nightly rate "
-            f"(${best.nightly_display:,.2f} × {NIGHTS} nights). "
+            f"({fx.short(best.nightly_display)} × {NIGHTS} nights). "
             "Final taxes and fees may differ — check the link before booking."
         )
     elif not best.includes_taxes_fees:
@@ -1257,8 +1373,8 @@ def build_discord_payload(
         "footer": {"text": "Manhattan only · total stay under threshold · verify before booking"},
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    if description:
-        embed["description"] = description
+    # State the rate we used (or that we had none) on every single alert.
+    embed["description"] = f"{description}\n\n{fx.note()}" if description else fx.note()
 
     images = hotel.get("images")
     if isinstance(images, list) and images and isinstance(images[0], dict):
@@ -1289,7 +1405,7 @@ def send_discord(session: requests.Session, webhook_url: str, payload: dict[str,
     return False
 
 
-def sample_payload(settings: Settings) -> dict[str, Any]:
+def sample_payload(settings: Settings, fx: Optional[FxRate] = None) -> dict[str, Any]:
     """A realistic-looking alert used by --test-discord."""
     hotel = {
         "name": "Example Hotel (test message)",
@@ -1307,7 +1423,9 @@ def sample_payload(settings: Settings) -> dict[str, Any]:
         large_beds=2,
     )
     others = [Offer("Expedia", 1975.00, ACTUAL, True, 493.75, hotel["link"])]
-    return build_discord_payload(hotel, best, others, "123 Example Street, New York, NY 10004", settings)
+    return build_discord_payload(
+        hotel, best, others, "123 Example Street, New York, NY 10004", settings, fx
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1321,8 +1439,10 @@ def process_hotels(
     settings: Settings,
     session: requests.Session,
     dry_run: bool,
+    fx: Optional[FxRate] = None,
 ) -> int:
     """Filter, price, de-duplicate and alert. Returns the number of alerts sent."""
+    fx = fx or FxRate()
     threshold = settings.max_total_price_usd
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     hotels_state: dict[str, Any] = state["hotels"]
@@ -1469,11 +1589,14 @@ def process_hotels(
                 print(f"[skip-price] {name}: could not verify the price; not alerting")
                 continue
 
-            payload = build_discord_payload(hotel, best, others, address, settings)
+            payload = build_discord_payload(hotel, best, others, address, settings, fx)
 
             if send_discord(session, settings.discord_webhook_url, payload):
                 alerts_sent += 1
-                print(f"[ALERT]      {name}: ${best.total:,.2f} ({best.kind}) — {why}")
+                print(
+                    f"[ALERT]      {name}: {fx.both(best.total)} "
+                    f"({best.kind}) — {why}"
+                )
                 hotels_state[key] = {
                     "name": name,
                     "last_alert_total": best.total,
@@ -1518,6 +1641,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Check-out           : {CHECK_OUT_DATE}  (fixed)")
         print(f"Nights              : {NIGHTS}")
         print(f"Threshold           : total < ${settings.max_total_price_usd:,.2f} USD")
+        print(
+            "CAD budget          : "
+            + (
+                f"CA${settings.max_total_price_cad:,.2f} "
+                "(converted to USD at run time; overrides the USD threshold)"
+                if settings.max_total_price_cad
+                else "not set — the USD threshold above is what applies"
+            )
+        )
+        print("Alerts displayed in : CAD (converted from USD at the live rate)")
         print(f"Adults              : {settings.adults}")
         print(f"Min adult-sized beds: {settings.min_large_beds}")
         print(f"Queries             : {settings.queries}")
@@ -1534,7 +1667,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not settings.discord_webhook_url:
             print("[error] DISCORD_WEBHOOK_URL is not set.")
             return 1
-        ok = send_discord(session, settings.discord_webhook_url, sample_payload(settings))
+        ok = send_discord(
+            session,
+            settings.discord_webhook_url,
+            sample_payload(settings, fetch_usd_to_cad(session)),
+        )
         print("Test message sent." if ok else "Test message FAILED.")
         return 0 if ok else 1
 
@@ -1550,8 +1687,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
         return 1
 
+    # One FX lookup per run. Everything the bot compares stays in USD; this is
+    # purely so the numbers a human reads come out in Canadian dollars.
+    fx = fetch_usd_to_cad(session)
+
+    if settings.max_total_price_cad:
+        # A CAD budget is only meaningful if we can convert it. Guessing a rate
+        # here would change which hotels qualify, so refuse instead.
+        converted = fx.to_usd(settings.max_total_price_cad)
+        if converted is None:
+            print(
+                "[error] MAX_TOTAL_PRICE_CAD is set but no USD→CAD rate could be "
+                "fetched, so the threshold is undefined. Not alerting this run."
+            )
+            return 1
+        print(
+            f"[fx] Budget CA${settings.max_total_price_cad:,.2f} "
+            f"= US${converted:,.2f} at today's rate."
+        )
+        settings.max_total_price_usd = converted
+
     print(f"Searching {CHECK_IN_DATE} → {CHECK_OUT_DATE} ({NIGHTS} nights), "
-          f"total under ${settings.max_total_price_usd:,.0f} USD, Manhattan only.\n")
+          f"total under {fx.short(settings.max_total_price_usd)} "
+          f"(US${settings.max_total_price_usd:,.0f}), Manhattan only.\n")
 
     try:
         hotels = search_hotels(session, settings)
@@ -1638,7 +1796,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     state = load_state()
-    process_hotels(hotels, state, settings, session, dry_run=args.dry_run)
+    process_hotels(hotels, state, settings, session, dry_run=args.dry_run, fx=fx)
     if not args.dry_run:
         save_state(state)
     return 0

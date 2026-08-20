@@ -69,8 +69,15 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
           # ---- optional tuning (all have sensible defaults) ----
-          # The $2,000 threshold. A total must be strictly UNDER this.
+          # The $2,000 threshold, in US DOLLARS. A total must be strictly UNDER
+          # this. Alerts are displayed in CAD, but the comparison happens in USD
+          # so that price history stays comparable as the exchange rate moves.
           MAX_TOTAL_PRICE_USD: "2000"
+          # Optional: set a budget in CANADIAN dollars instead. When this is a
+          # non-zero number it is converted to USD at the live rate each run and
+          # replaces MAX_TOTAL_PRICE_USD above. Leave at "0" to use the USD
+          # threshold. Example: "2750" means "alert under CA$2,750 total".
+          MAX_TOTAL_PRICE_CAD: "0"
           # How many dollars cheaper a hotel must get before you are told again.
           MIN_DROP_USD: "50"
           # Number of guests travelling.
