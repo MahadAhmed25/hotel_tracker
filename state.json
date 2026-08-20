@@ -2,7 +2,7 @@
   "hotels": {
     "token:ChUI9r76narMz6IxGgkvbS8wYzdocTkQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2264.0,
       "name": "The New Yorker Hotel"
     },
@@ -14,25 +14,25 @@
     },
     "token:ChYI4PLb4LT33pghGgovbS8wZnFxbXF2EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2309.0,
       "name": "ROW NYC"
     },
     "token:ChYI4qfVqc254NMRGgovbS8wd2ZkenM2EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2214.0,
       "name": "Millennium Hotel Broadway Times Square"
     },
     "token:ChYI64v08diiwsl3GgovbS8wd2ZoMHI0EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2146.0,
       "name": "Holiday Inn Express New York City Times Square by IHG"
     },
     "token:ChYIgPn8mcvjjZoqGgovbS8wYnkxZjdfEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2350.0,
       "name": "New York Hilton Midtown"
     },
@@ -47,13 +47,13 @@
       "last_alert_at": "2026-08-20T01:26:15+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1948.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1948.0,
       "name": "Courtyard by Marriott New York Manhattan/SoHo"
     },
     "token:ChYImeqn5sP5xYFQGgovbS8wOXJ0bXZ2EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2333.0,
       "name": "Hyatt Grand Central New York"
     },
@@ -74,7 +74,7 @@
       "last_alert_at": "2026-08-18T19:46:23+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1756.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1785.0,
       "name": "Four Points by Sheraton Manhattan SoHo Village"
     },
@@ -101,7 +101,7 @@
     },
     "token:ChcIj8_wi8mwiqm3ARoKL20vMHdmaDIxXxAB": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2249.0,
       "name": "New York Marriott Downtown"
     },
@@ -137,7 +137,7 @@
     },
     "token:ChcIsOfeisD_ktB7GgsvZy8xdGQ2aGQ5ZhAB": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2010.0,
       "name": "Duane Street Hotel Tribeca, Belvilla District 6 Formerly Sonder"
     },
@@ -155,19 +155,19 @@
       "last_alert_at": "2026-08-19T01:21:38+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1723.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1723.0,
       "name": "Heritage Hotel New York City"
     },
     "token:ChgI55uX3ILS0tiZARoLL2cvMXRmd2ZkcmoQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2127.0,
       "name": "Distrikt Hotel New York City, Tapestry Collection by Hilton"
     },
     "token:ChgI6cHeqtOZ2MYFGgwvZy8xMXg5d3kwajUQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2271.0,
       "name": "Holiday Inn Express Nyc Chelsea - Nomad Area by IHG"
     },
@@ -176,25 +176,25 @@
       "last_alert_at": "2026-08-19T16:34:06+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1844.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1847.0,
       "name": "Holiday Inn Express Manhattan Midtown West by IHG"
     },
     "token:ChgIm-ec2debvNGWARoLL2cvMXRncHRqajgQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2108.0,
       "name": "Ameritania Hotel at Times Square"
     },
     "token:ChgIpdjpsdLl2NqtARoLL2cvMXRoY3Q3aGIQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2229.0,
       "name": "The Time New York - JDV by Hyatt"
     },
     "token:ChgIppKUrfKV9ZNBGgwvZy8xaG1icXFuc3EQAQ": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2226.0,
       "name": "World Center Hotel"
     },
@@ -203,7 +203,7 @@
       "last_alert_at": "2026-08-20T08:41:09+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1850.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1850.0,
       "name": "Blue Angel Hotel NYC, an Ascend Collection Hotel"
     },
@@ -212,7 +212,7 @@
       "last_alert_at": "2026-08-19T16:34:06+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1550.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1630.0,
       "name": "AMTD Idea Tribeca Hotel"
     },
@@ -239,13 +239,13 @@
       "last_alert_at": "2026-08-18T19:46:23+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1776.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1879.0,
       "name": "Hilton Garden Inn NYC Financial Center/Manhattan Downtown"
     },
     "token:ChkI19T8ueGpqtw0Gg0vZy8xMWJ0bHNyMmIzEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2194.0,
       "name": "Hotel Indigo Lower East Side New York by IHG"
     },
@@ -257,19 +257,19 @@
     },
     "token:ChkI5o_w8rfKut8xGg0vZy8xMWR4ZmJrOXJfEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2226.0,
       "name": "Club Quarters Hotel World Trade Center, New York"
     },
     "token:ChkI6e_a0v6U49duGg0vZy8xMWdydjhkanc5EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2282.0,
       "name": "Moxy NYC Chelsea"
     },
     "token:ChkI_pH0naaL7b9kGg0vZy8xMXYwbm4xdzJoEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2292.0,
       "name": "Romer Hell's Kitchen, neighborhood hotel"
     },
@@ -278,13 +278,13 @@
       "last_alert_at": "2026-08-18T19:46:23+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1837.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1837.0,
       "name": "Belvedere Hotel"
     },
     "token:ChkIlLmRvtbSjMAGGg0vZy8xMWR6ZGp6a3c3EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2131.0,
       "name": "Hotel Seville NoMad - The Unbound Collection by Hyatt"
     },
@@ -296,13 +296,13 @@
     },
     "token:ChkIoJOJvKHI5JoHGg0vZy8xMWc4N2JoaGM3EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2132.0,
       "name": "Pod Times Square"
     },
     "token:ChkIooCAqvyy0fDgARoML2cvMWhoZ18zbWdzEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2266.0,
       "name": "The Manhattan at Times Square Hotel"
     },
@@ -317,7 +317,7 @@
     },
     "token:ChkIp_jZ7IuS_ZCFARoML2cvMXMwNHdybnhkEAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2334.0,
       "name": "W New York - Times Square"
     },
@@ -326,7 +326,7 @@
       "last_alert_at": "2026-08-20T16:37:39+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1830.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1830.0,
       "name": "DoubleTree by Hilton New York Downtown"
     },
@@ -344,13 +344,13 @@
       "last_alert_at": "2026-08-20T16:37:39+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1875.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1875.0,
       "name": "DoubleTree by Hilton Hotel New York Times Square West"
     },
     "token:ChkIvr2p8YHZ9_MUGg0vZy8xMWZxcGRyemM2EAE": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2035.0,
       "name": "The Draper New York, Tapestry Collection by Hilton"
     },
@@ -359,7 +359,7 @@
       "last_alert_at": "2026-08-20T16:37:39+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1502.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1502.0,
       "name": "Four Points by Sheraton New York Downtown"
     },
@@ -374,7 +374,7 @@
       "last_alert_at": "2026-08-19T01:21:38+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1489.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1523.0,
       "name": "Night Hotel Broadway"
     },
@@ -386,7 +386,7 @@
     },
     "token:ChoI3Ovs6-fA4ZOLARoNL2cvMTFma21fMHFjZBAB": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2070.0,
       "name": "Courtyard by Marriott New York Manhattan/Midtown West"
     },
@@ -443,7 +443,7 @@
     },
     "token:ChoIosby74Tg_-TOARoNL2cvMTF6MF9rOXRxbRAB": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2163.0,
       "name": "Nester Finn Financial District"
     },
@@ -458,7 +458,7 @@
       "last_alert_at": "2026-08-18T19:46:23+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1769.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1793.0,
       "name": "Citadines Connect Fifth Avenue New York"
     },
@@ -473,7 +473,7 @@
       "last_alert_at": "2026-08-19T16:34:06+00:00",
       "last_alert_kind": "ACTUAL",
       "last_alert_total": 1824.0,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 1902.0,
       "name": "Mint House 70 Pine by Kasa"
     },
@@ -485,7 +485,7 @@
     },
     "token:ChoIx5KQofrhop6iARoNL2cvMTFxem02ZnNjXxAB": {
       "below_threshold": false,
-      "last_seen_at": "2026-08-20T16:37:39+00:00",
+      "last_seen_at": "2026-08-20T17:22:53+00:00",
       "last_seen_total": 2092.0,
       "name": "Pestana CR7 Times Square"
     },
@@ -517,6 +517,6 @@
       "name": "Hilton Garden Inn New York/Manhattan-Midtown East"
     }
   },
-  "updated_at": "2026-08-20T16:37:46+00:00",
+  "updated_at": "2026-08-20T17:22:53+00:00",
   "version": 1
 }
